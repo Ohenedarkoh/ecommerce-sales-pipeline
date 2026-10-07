@@ -6,19 +6,17 @@ from pathlib import Path
 project_root = Path.cwd()
 sys.path.append(str(project_root))
 
-from src.utils.data_utils import load_csv, convert_type
+from src.utils.data_utils import load_csv, convert_type, convert_datetype,profile_col
 
 
 # Database connection
   
-
-connection_url = 'postgresql+psycopg2://postgres:password@localhost:5432/ecommerce'
+connection_url = 'postgresql+psycopg2://postgres:password@host:port/db'
 engine = create_engine(connection_url)
 
 
  
-# Extract
-
+# Extraction
 
 data_path = 'C:/Users/DELL/Projects/ecommerce-sales-pipeline/data/raw'
 
@@ -28,9 +26,25 @@ Products = load_csv('Products.csv', data_path)
 Orders = load_csv('Orders.csv', data_path)
 
 
- 
+#transform customers
+
+Customers = Customers.rename(columns={
+    'Customer ID': 'customer_id',
+    'Customer Name': 'customer_name'
+})
+
+
+# load customers
+Customers.to_sql(
+    name='customers',
+    if_exists='append',
+    con=engine,
+    index=False
+)
+
+
+
 # Transform Locations
- 
 
 Location = Location.rename(columns={
     'Postal Code': 'postal_code',
@@ -40,18 +54,17 @@ Location = Location.rename(columns={
     'Country/Region': 'country'
 })
 
-# Load locations once
-# Location.to_sql(
-#     name='locations',
-#     if_exists='append',
-#     con=engine,
-#     index=False
-# )
+# Load locations 
+Location.to_sql(
+    name='locations',
+    if_exists='append',
+    con=engine,
+    index=False
+)
 
 
  
 # Create location mapping
-
 
 query = "SELECT location_id, postal_code FROM locations"
 
@@ -74,6 +87,35 @@ location_mapping = location_mapping.drop_duplicates(
 )
 
 
+ 
+# transform products
+
+malformed_rows= (
+    Products['Category'].isna() & 
+    Products['Sub-Category'].isna() &
+    Products['Product Name,,,,,'].isna())
+
+Products.loc[malformed_rows,['Product ID', 'Category', 'Sub-Category', 'Product Name,,,,,']] = Products.loc[malformed_rows,'Product ID'].str.split(';', n=3, expand=True).values
+
+Products['Product Name,,,,,'] = Products['Product Name,,,,,'].str.rstrip(',')
+
+Products = Products.rename(columns={
+    'Product ID': 'product_id',
+    'Category': 'category',
+    'Sub-Category':'sub_category',
+    'Product Name,,,,,':'product_name'
+})
+
+print(profile_col(Products))
+
+
+#load products to db
+Products.to_sql(
+    name='products',
+    if_exists='append',
+    con=engine,
+    index=False
+)
 
 # Transform Orders
 
@@ -116,6 +158,12 @@ Orders = Orders.rename(columns={
     'Profit': 'profit'
 })
 
+Orders['order_date']=convert_datetype(Orders['order_date'])
+Orders['ship_date'] = convert_datetype(Orders['ship_date'])
+
+
+print((Orders['ship_date']<Orders['order_date']).sum())
+
 Orders.to_sql(
     name='orders',
     if_exists='append',
@@ -123,36 +171,6 @@ Orders.to_sql(
     index=False
 )
 
-print(Orders.columns)
+
 
   
-# Rename and load customers to db
-
-Customers = Customers.rename(columns={
-    'Customer Name': 'customer_id',
-    'Customer ID': 'customer_name',
-})
-
-Customers.to_sql(
-    name='customers',
-    if_exists='append',
-    con=engine,
-    index=False
-)
-
-  
-# Rename and load products to db
-Products = Products.rename(columns={
-    'Product ID ': 'product_id',
-    ' Category': 'category',
-    'Sub-Category':'sub_category',
-    'Product Name,,,,,':'product_name'
-})
-
-
-Products.to_sql(
-    name='products',
-    if_exists='append',
-    con=engine,
-    index=False
-)
