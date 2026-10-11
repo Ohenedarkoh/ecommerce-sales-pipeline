@@ -2,11 +2,49 @@ from sqlalchemy import create_engine
 import pandas as pd
 import sys
 from pathlib import Path
+import logging
 
 project_root = Path.cwd()
 sys.path.append(str(project_root))
 
 from src.utils.data_utils import load_csv, convert_type, convert_datetype,profile_col
+
+#create the logs directory automatically
+log_dir = Path('logs')
+log_dir.mkdir(parents=True, exist_ok=True)
+
+# define the log file
+filename= log_dir/'pipeline.log'
+
+# create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+
+# create console handler and set level to info
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+
+#create file handler and set level to debug
+fh= logging.FileHandler(filename)
+fh.setLevel(logging.DEBUG)
+
+
+# create formatter
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# add formatter to ch and fh
+ch.setFormatter(formatter)
+fh.setFormatter(formatter)
+
+# add ch and fh to logger
+logger.addHandler(ch)
+logger.addHandler(fh)
+
+
+
+
 
 
 # Database connection
@@ -34,6 +72,7 @@ Customers = load_csv('Customers.csv', data_path)
 Location = load_csv('Location.csv', data_path)
 Products = load_csv('Products.csv', data_path)
 Orders = load_csv('Orders.csv', data_path)
+logging.info('')
 
 dataframes= {
     'Customers':Customers,
@@ -361,35 +400,35 @@ print("Pre-load constraint validation passed")
 
 
     
-# load customers to db
-Customers.to_sql(
-    name='customers',
-    if_exists='append',
-    con=engine,
-    index=False
-)
-# Load locations to db 
-Location.to_sql(
-    name='locations',
-    if_exists='append',
-    con=engine,
-    index=False
-)
+# # load customers to db
+# Customers.to_sql(
+#     name='customers',
+#     if_exists='append',
+#     con=engine,
+#     index=False
+# )
+# # Load locations to db 
+# Location.to_sql(
+#     name='locations',
+#     if_exists='append',
+#     con=engine,
+#     index=False
+# )
 
-#load products to db
-Products.to_sql(
-    name='products',
-    if_exists='append',
-    con=engine,
-    index=False
-)
-#load orders to db
-Orders.to_sql(
-    name='orders',
-    if_exists='append',
-    con=engine,
-    index=False
-)
+# #load products to db
+# Products.to_sql(
+#     name='products',
+#     if_exists='append',
+#     con=engine,
+#     index=False
+# )
+# #load orders to db
+# Orders.to_sql(
+#     name='orders',
+#     if_exists='append',
+#     con=engine,
+#     index=False
+# )
 
 
 
