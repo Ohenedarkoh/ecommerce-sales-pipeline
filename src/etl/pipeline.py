@@ -44,12 +44,9 @@ logger.addHandler(fh)
 
 
 
-
-
-
 # Database connection
   
-connection_url = 'postgresql+psycopg2://postgres:password@host:port/db'
+connection_url = 'postgresql+psycopg2://postgres:redviper@localhost:5432/ecommerce'
 engine = create_engine(connection_url)
 
 
@@ -68,11 +65,36 @@ for filename in files:
 
 
 # Extraction
-Customers = load_csv('Customers.csv', data_path)
-Location = load_csv('Location.csv', data_path)
-Products = load_csv('Products.csv', data_path)
-Orders = load_csv('Orders.csv', data_path)
-logging.info('')
+try:
+    logger.info('Files extraction began')
+    Customers = load_csv('Customers.csv', data_path)
+    logger.info(f"Successfully extacted {len(Customers)} customers.")
+except Exception:
+    logger.exception('Customers extraction failed.')
+    raise 
+
+try:
+    Location = load_csv('Location.csv', data_path)
+    logger.info(f"Successfully extacted {len(Location)} locations.")
+except Exception:
+    logger.exception('Locations extraction failed')
+    raise 
+
+try:
+    Products = load_csv('Products.csv', data_path)
+    logger.info(f"Successfully extacted {len(Products)} products.")
+except Exception:
+    logger.exception('Products extraction failed.')
+    raise 
+
+try:
+    Orders = load_csv('Orders.csv', data_path)
+    logger.info(f"Successfully extacted {len(Orders)} orders.")
+except Exception:
+    logger.exception('Orders extraction failed.')
+    raise 
+
+   
 
 dataframes= {
     'Customers':Customers,
@@ -80,7 +102,6 @@ dataframes= {
     'Products':Products,
     'Orders':Orders
 }
-
 
 # validating whether files are not empty
 for name, dataframe in dataframes.items(): 
@@ -140,111 +161,209 @@ for dataset,cols in expected_cols.items():
         print(f"{dataset} schema validation passed")
 
 
-#transform customers
 
-Customers = Customers.rename(columns={
-    'Customer ID': 'customer_id',
-    'Customer Name': 'customer_name'
-})
+
+
+#transform customers
+try:
+    logger.info('Renaming columns in customers data.')
+    Customers = Customers.rename(columns={
+        'Customer ID': 'customer_id',
+        'Customer Name': 'customer_name'
+    })
+    logger.info('Successfully renamed columns in customers data.')
+except Exception:
+    logger.info('Failed to rename columns in customers data.')
+    raise
 
 
 # Transform Locations
-
-Location = Location.rename(columns={
-    'Postal Code': 'postal_code',
-    'City': 'city',
-    'State': 'state',
-    'Region': 'region',
-    'Country/Region': 'country'
-})
-
+try:
+    logger.info('Initiated Locations data transformation.')
+    Location = Location.rename(columns={
+        'Postal Code': 'postal_code',
+        'City': 'city',
+        'State': 'state',
+        'Region': 'region',
+        'Country/Region': 'country'
+    })
+    logger.info('Successfully renamed locations columns.')
+except Exception:
+    logger.exception('Failed to rename locations columns.')
+    raise
 
 # Create location mapping
 
-query = "SELECT location_id, postal_code FROM locations"
+try:
+    logger.info('Mapping locations.')
+    query = "SELECT location_id, postal_code FROM locations"
 
-location_mapping = pd.read_sql(
-    query,
-    con=engine
-)
+    location_mapping = pd.read_sql(
+        query,
+        con=engine
+    )
+    logger.info('Mapped location successfully.')
+except Exception:
+    logger.info('Failed to map locations.')
+    raise
+
+
 
 # Normalize postal codes
-location_mapping['postal_code'] = (
-    location_mapping['postal_code']
-    .astype(str)
-    .str.replace('.0', '', regex=False)
-)
+try:
+    logger.info('Converting the data type of postal codes to strings and making them whole numbers in location_mapping.')
+    location_mapping['postal_code'] = (
+        location_mapping['postal_code']
+        .astype(str)
+        .str.replace('.0', '', regex=False)
+    )
+    logger.info('Successfully converted data type of postal codes and made all whole numbers in location_mapping.')
+except Exception:
+    logger.exception('Failed to converted data type of postal code in location_mapping.')
+    raise
+
 
 # One location_id per postal code
-location_mapping = location_mapping.drop_duplicates(
-    subset='postal_code',
-    keep='first'
-)
+try:
+    logger.info('Dropping duplicates in location_mapping.')
+    location_mapping = location_mapping.drop_duplicates(
+        subset='postal_code',
+        keep='first'
+    )
+    logger.info('Successfully dropped duplicates.')
+except Exception:
+    logger.exception('Failed to drop duplicates in location_mapping.')
+    raise
+
+
+
 
 
 # transform products
+try:
+    logger.info('Grouping malformed rows')
+    malformed_rows= (
+        Products['Category'].isna() & 
+        Products['Sub-Category'].isna() &
+        Products['Product Name,,,,,'].isna())
+    logger.info('Successfully grouped malformed rows.')
+except Exception:
+    logger.exception('Failed to group malformed rows.')
+    raise
 
-malformed_rows= (
-    Products['Category'].isna() & 
-    Products['Sub-Category'].isna() &
-    Products['Product Name,,,,,'].isna())
 
-Products.loc[malformed_rows,['Product ID', 'Category', 'Sub-Category', 'Product Name,,,,,']] = Products.loc[malformed_rows,'Product ID'].str.split(';', n=3, expand=True).values
+try:
+    logger.info('Splitting malformed rows.')
+    Products.loc[malformed_rows,['Product ID', 'Category', 'Sub-Category', 'Product Name,,,,,']] = Products.loc[malformed_rows,'Product ID'].str.split(';', n=3, expand=True).values
+    logger.info('Successfully split malformed rows.')
+except Exception:
+    logger.exception('Failed to split malformed rows.')
+    raise
 
-Products['Product Name,,,,,'] = Products['Product Name,,,,,'].str.rstrip(',')
+try:
+    logger.info('Removing trailing commas from product names.')
+    Products['Product Name,,,,,'] = Products['Product Name,,,,,'].str.rstrip(',')
+    logger.info('Successfully removed traling commas from product names.')
+except Exception:
+    logger.exception('Failed to remove trailing commas from product names.')
+    raise
 
-Products = Products.rename(columns={
-    'Product ID': 'product_id',
-    'Category': 'category',
-    'Sub-Category':'sub_category',
-    'Product Name,,,,,':'product_name'
-})
+
+try:
+    logger.info('Renaming product columns.')
+    Products = Products.rename(columns={
+            'Product ID': 'product_id',
+            'Category': 'category',
+            'Sub-Category':'sub_category',
+            'Product Name,,,,,':'product_name'
+    })
+    logger.info('Successfully renamed product columns.')
+except Exception:
+    logger.exception('Failed to rename product columns.')
+
 
 print(profile_col(Products))
 
 
 
 #Transform Orders
+try:
+    logger.info('Converting data type of postal code to str.')
+    Orders['Postal Code'] = convert_type(
+        Orders['Postal Code'],
+        'str'
+    )
+    logger.info('Successfully converted data type of postal code in Order data.')
+except Exception:
+    logger.Exception('Failed to convert data type of postal code to str.')
+    raise
 
-Orders['Postal Code'] = convert_type(
-    Orders['Postal Code'],
-    'str'
-)
+try:
+    logger.info('Merging Order with location_mapping.')
+    Orders = Orders.merge(
+        location_mapping,
+        left_on='Postal Code',
+        right_on='postal_code',
+        how='left'
+    )
+    logger.info('Successfully merged Orders with location_mapping.')
+except Exception:
+    logger.exception('Failed to merge Orders with location_mapping.')
+    raise
 
-Orders = Orders.merge(
-    location_mapping,
-    left_on='Postal Code',
-    right_on='postal_code',
-    how='left'
-)
+try:
+    logger.info('Printing orders shape and nulls after location_mapping.')
+    print("Orders shape after merging with location mapping:", Orders.shape)
+    print("Missing location IDs:", Orders['location_id'].isna().sum())
+    logger.info('Successfully printed orders shape and nulls after merge.')
+except Exception:
+    logger.exception('Failed to print orders shape and nulls after merge with location_mapping.')
+    raise
 
-print("Orders after location mapping:", Orders.shape)
-print("Missing location IDs:", Orders['location_id'].isna().sum())
 
-Orders = Orders.drop(
-    columns=['Postal Code', 'postal_code']
-)
+
+try:
+    logger.info('Dropping postal code columns from Orders after merge.')
+    Orders = Orders.drop(
+        columns=['Postal Code', 'postal_code']
+    )
+    logger.info("Successfully dropped postal code columns from Orders after merge.")
+except Exception:
+    logger.exception('Failed to drop postal code columns from Orders after merge.')
+    raise
 
 
 # Rename and load Orders to db
+try:
+    logger.info('Renaming Orders columns.')
+    Orders = Orders.rename(columns={
+        'Row ID': 'row_id',
+        'Order ID': 'order_id',
+        'Order Date': 'order_date',
+        'Ship Date': 'ship_date',
+        'Ship Mode': 'ship_mode',
+        'Customer ID': 'customer_id',
+        'Segment': 'segment',
+        'Product ID': 'product_id',
+        'Sales': 'sales',
+        'Quantity': 'quantity',
+        'Discount': 'discount',
+        'Profit': 'profit'
+    })
+    logger.info('Successfully renamed Orders columns.')
+except Exception:
+    logger.exception('Failed to rename Orders columns.')
+    raise
 
-Orders = Orders.rename(columns={
-    'Row ID': 'row_id',
-    'Order ID': 'order_id',
-    'Order Date': 'order_date',
-    'Ship Date': 'ship_date',
-    'Ship Mode': 'ship_mode',
-    'Customer ID': 'customer_id',
-    'Segment': 'segment',
-    'Product ID': 'product_id',
-    'Sales': 'sales',
-    'Quantity': 'quantity',
-    'Discount': 'discount',
-    'Profit': 'profit'
-})
 
-Orders['order_date']=convert_datetype(Orders['order_date'])
-Orders['ship_date'] = convert_datetype(Orders['ship_date'])
+try:
+    logger.info('Converting date types of orders and ship dates in Orders.')
+    Orders['order_date']=convert_datetype(Orders['order_date'])
+    Orders['ship_date'] = convert_datetype(Orders['ship_date'])
+    logger.info('Successfully converted date types of orders and ship dates in Orders.')
+except Exception:
+    logger.exception('Failed to convert date types of orders and ship dates in Orders.')
+    raise
 
 
 # print((Orders['ship_date']<Orders['order_date']).sum())
