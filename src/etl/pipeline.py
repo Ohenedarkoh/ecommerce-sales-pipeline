@@ -46,7 +46,7 @@ logger.addHandler(fh)
 
 # Database connection
   
-connection_url = 'postgresql+psycopg2://postgres:redviper@localhost:5432/ecommerce'
+connection_url = 'postgresql+psycopg2://postgres:password@host:port/db'
 engine = create_engine(connection_url)
 
 
@@ -55,14 +55,18 @@ data_path = 'C:/Users/DELL/Projects/ecommerce-sales-pipeline/data/raw'
 files=['Customers.csv','Location.csv','Products.csv','Orders.csv']
 
 #  validatiing whether files exist and are actual files
-for filename in files:
-    file_path = Path(data_path)/filename
+try:
+    logger.info('Validating file existence and file types.')
+    for filename in files:
+        file_path = Path(data_path)/filename
 
-    if file_path.exists() and file_path.is_file():
-        print(f"{file_path} exists and is a file")
-    else:
-        raise FileNotFoundError(f"{file_path} does not exist or is not a file")
-
+        if file_path.exists() and file_path.is_file():
+            logger.info(f"{file_path} exists and is a file")
+        else:
+            raise FileNotFoundError(f"{file_path} does not exist or is not a file")
+except Exception:
+    logger.exception('File existence validation failed.')
+    raise
 
 # Extraction
 try:
@@ -104,12 +108,16 @@ dataframes= {
 }
 
 # validating whether files are not empty
-for name, dataframe in dataframes.items(): 
-    if dataframe.empty:
-        raise ValueError(f"{name} is empty")
-    else:
-        print(f"{name} is not empty")
-
+try:
+    logger.info("Validating whether files are not empty.")
+    for name, dataframe in dataframes.items(): 
+        if dataframe.empty:
+            raise ValueError(f"{name} is empty")
+        else:
+            logger.info(f"{name} is not empty")
+except Exception:
+    logger.exception('Failed to validate whether files are not empty.')
+    raise
 
 
 expected_cols={
@@ -149,16 +157,21 @@ expected_cols={
     }
 
 #validating the expected columns across all datasets
-for dataset,cols in expected_cols.items():
-    dataframe = dataframes[dataset]
-    missing_cols = set(cols) - set(dataframe.columns)
+try:
+    logger.info('Validating expected columns across all datasets ')
+    for dataset,cols in expected_cols.items():
+        dataframe = dataframes[dataset]
+        missing_cols = set(cols) - set(dataframe.columns)
 
-    if missing_cols:
-        raise ValueError(
-            f"Schema validation failed. Missing: {missing_cols}"
-            )
-    else:
-        print(f"{dataset} schema validation passed")
+        if missing_cols:
+            raise ValueError(
+                f"Schema validation failed for {dataset}. Missing: {missing_cols}"
+                )
+        else:
+            logger.info(f"{dataset} schema validation passed")
+except Exception:
+    logger.exception('Failed to validate the expected columns across all datasets.')
+    raise
 
 
 
@@ -173,7 +186,7 @@ try:
     })
     logger.info('Successfully renamed columns in customers data.')
 except Exception:
-    logger.info('Failed to rename columns in customers data.')
+    logger.exception('Failed to rename columns in customers data.')
     raise
 
 
@@ -192,8 +205,8 @@ except Exception:
     logger.exception('Failed to rename locations columns.')
     raise
 
-# Create location mapping
 
+# Create location mapping
 try:
     logger.info('Mapping locations.')
     query = "SELECT location_id, postal_code FROM locations"
@@ -202,22 +215,22 @@ try:
         query,
         con=engine
     )
-    logger.info('Mapped location successfully.')
+    logger.info('Successfully retrieved location mapping from database.')
 except Exception:
-    logger.info('Failed to map locations.')
+    logger.exception('Failed to map locations.')
     raise
 
 
 
 # Normalize postal codes
 try:
-    logger.info('Converting the data type of postal codes to strings and making them whole numbers in location_mapping.')
+    logger.info('Converting the data type of postal codes to strings in location_mapping.')
     location_mapping['postal_code'] = (
         location_mapping['postal_code']
         .astype(str)
         .str.replace('.0', '', regex=False)
     )
-    logger.info('Successfully converted data type of postal codes and made all whole numbers in location_mapping.')
+    logger.info('Successfully converted data type of postal codes in location_mapping.')
 except Exception:
     logger.exception('Failed to converted data type of postal code in location_mapping.')
     raise
@@ -225,14 +238,19 @@ except Exception:
 
 # One location_id per postal code
 try:
-    logger.info('Dropping duplicates in location_mapping.')
+    # Record the number of location mapping rows before deduplication
+    logger.info(
+    f"Location mapping contains {len(location_mapping)} rows before deduplication.")
+    # Remove duplicate postal codes, retaining the first occurrence
     location_mapping = location_mapping.drop_duplicates(
         subset='postal_code',
         keep='first'
     )
-    logger.info('Successfully dropped duplicates.')
+    logger.info(f"Location mapping contains {len(location_mapping)} rows after deduplication.")
+    logger.info('Successfully removed duplicate postal codes from location mapping.')
+
 except Exception:
-    logger.exception('Failed to drop duplicates in location_mapping.')
+    logger.exception('Failed to drop duplicated postal codes in location_mapping.')
     raise
 
 
@@ -246,16 +264,16 @@ try:
         Products['Category'].isna() & 
         Products['Sub-Category'].isna() &
         Products['Product Name,,,,,'].isna())
-    logger.info('Successfully grouped malformed rows.')
+    logger.info(f"Successfully grouped {malformed_rows.sum()} malformed rows.")
 except Exception:
     logger.exception('Failed to group malformed rows.')
     raise
 
 
 try:
-    logger.info('Splitting malformed rows.')
+    logger.info(f"Splitting {malformed_rows.sum()} malformed rows.")
     Products.loc[malformed_rows,['Product ID', 'Category', 'Sub-Category', 'Product Name,,,,,']] = Products.loc[malformed_rows,'Product ID'].str.split(';', n=3, expand=True).values
-    logger.info('Successfully split malformed rows.')
+    logger.info(f'Successfully split {malformed_rows.sum()} malformed rows.')
 except Exception:
     logger.exception('Failed to split malformed rows.')
     raise
@@ -280,10 +298,7 @@ try:
     logger.info('Successfully renamed product columns.')
 except Exception:
     logger.exception('Failed to rename product columns.')
-
-
-print(profile_col(Products))
-
+    raise
 
 
 #Transform Orders
@@ -295,7 +310,7 @@ try:
     )
     logger.info('Successfully converted data type of postal code in Order data.')
 except Exception:
-    logger.Exception('Failed to convert data type of postal code to str.')
+    logger.exception('Failed to convert data type of postal code to str.')
     raise
 
 try:
@@ -311,15 +326,8 @@ except Exception:
     logger.exception('Failed to merge Orders with location_mapping.')
     raise
 
-try:
-    logger.info('Printing orders shape and nulls after location_mapping.')
-    print("Orders shape after merging with location mapping:", Orders.shape)
-    print("Missing location IDs:", Orders['location_id'].isna().sum())
-    logger.info('Successfully printed orders shape and nulls after merge.')
-except Exception:
-    logger.exception('Failed to print orders shape and nulls after merge with location_mapping.')
-    raise
-
+logger.info(f"Orders shape after merging with location mapping: {Orders.shape}")
+logger.info(f"Missing location IDs:{Orders['location_id'].isna().sum()}")
 
 
 try:
@@ -382,69 +390,109 @@ missing_fields={
     'missing_location':missing_location,
     'missing_products':missing_products
 }
+try:
+    logger.info('Validating whether datasets have missing values in fields that do not allow nulls')
+    if any(value.gt(0).any() for value in missing_fields.values()):
+        raise ValueError(
+            f" There are missing fields in the datasets."
+        )
+    else:
+        logger.info('Missing-value validation passed.')
+except Exception:
+    logger.exception('Failed to validate whether datasets have missing values in fields that do not allow nulls')
+    raise
 
-if any(value.gt(0).any() for value in missing_fields.values()):
-    raise ValueError(
-        f" There are missing fields in the datasets."
-    )
 
 date_columns = ['order_date', 'ship_date']
 
-
 #validating datetime type for date columns
-for column in date_columns:
-    if not pd.api.types.is_datetime64_any_dtype(Orders[column]):
-        raise TypeError(
-            f"{column} must be a datetime column"
-        )
-    else:
-        print(f"{column} datatype validation passed")
+try:
+    logger.info('Validating datetime type for date columns.')
+    for column in date_columns:
+        if not pd.api.types.is_datetime64_any_dtype(Orders[column]):
+            raise TypeError(
+                f"{column} must be a datetime column"
+            )
+        else:
+            logger.info(f"{column} datatype validation passed.")
+except Exception:
+    logger.exception('Failed to validate datetime type for date columns in Orders dataset.')
+    raise
 
 
 # validating all order dates to be before ship dates
 invalid_dates= (Orders['ship_date'] < Orders['order_date']).sum()
-if invalid_dates>0 :
-    raise ValueError(
-        f" There are ship dates that come before order dates."
-            )
-else:
-    print("Date relationship validation passed.")
+try:
+    logger.info('Date relationship validation ')
+    if invalid_dates>0 :
+        raise ValueError(
+            f" There are ship dates that come before order dates."
+                )
+    else:
+        logger.info("Date relationship validation passed.")
+except Exception:
+    logger.exception('Failed to validate all order dates to be before ship dates.')
+    raise
 
 
 
 # validation: customer_id must be unique
-if Customers['customer_id'].nunique() != len(Customers):
-    raise ValueError(
-        "Customer ID contains duplicate values."
+try:
+    logger.info('Validating customer_id uniqueness.')
+    if Customers['customer_id'].nunique() != len(Customers):
+            raise ValueError(
+            "Customer ID contains duplicate values."
     )
+    logger.info('Customer_id was unique.')
+except Exception:
+    logger.exception('Failed to validate customer_id uniqueness.')
+    raise
+
+
 
 # Orders: row_id must be unique
-if Orders['row_id'].nunique() != len(Orders):
-    raise ValueError(
-        "Row ID contains duplicate values."
+try:
+    logger.info('Validating row_ids uniqueness.')
+    if Orders['row_id'].nunique() != len(Orders):
+        raise ValueError(
+            "Row ID contains duplicate values."
     )
-
-print("Primary-key uniqueness validation passed")
+    logger.info('Row_ids are unique.')
+except Exception:
+    logger.exception('Failed to validate row_ids uniqueness.')
+    raise
 
 
 #validation: referential integrity for customers
-missing_customers = set(Orders['customer_id']) - set(Customers['customer_id'])
+missingCustomers = set(Orders['customer_id']) - set(Customers['customer_id'])
 
-if missing_customers:
-    raise ValueError(
-        f"Orders contain customer IDs not found in Customers: {missing_customers}"
+try:
+    logger.info('Referential integrity validation for customers.')
+    if missing_customers:
+        raise ValueError(
+            f"Orders contain customer IDs not found in Customers: {missingCustomers}"
     )
+    logger.info('All customer IDs in Orders exist in Customers.')
+except Exception:
+    logger.exception('Referential integrity has been violated in Orders.')
+    raise
 
-print("Customer referential integrity validation passed")
 
 
 #validation: referential integrity for location
-if Orders['location_id'].isna().any():
-    raise ValueError(
-        "Some orders could not be mapped to a location."
-    )
+missingLocation = set(Orders['location_id']) - set(location_mapping['location_id'])
 
-print("Location mapping validation passed")
+try:
+    logger.info('Referential integrity check for location.')
+    if missingLocation:
+        raise ValueError(
+            "Orders contain location IDs not found in Location."
+    )
+    logger.info('Location passed the referential integrity check.')
+except Exception:
+    logger.exception('Referential integrity has been violated in Location.')
+    raise
+
 
 #numeric/data-type validation
 numeric_columns = [
@@ -454,38 +502,48 @@ numeric_columns = [
     'profit'
 ]
 
-for column in numeric_columns:
-    if not pd.api.types.is_numeric_dtype(Orders[column]):
-        raise TypeError(
-            f"{column} must be numeric"
+try:
+    logger.info('Numeric/data-type validation.')
+    for column in numeric_columns:
+        if not pd.api.types.is_numeric_dtype(Orders[column]):
+            raise TypeError(
+                f"{column} must be numeric"
         )
+    logger.info('Numeric/data-type validation passed.')
+except Exception:
+    logger.exception('Numeric/data-type validation failed.')
+    raise
 
-print("Numeric datatype validation passed")
-
-
-
-if not pd.api.types.is_integer_dtype(Orders['quantity']):
-    raise TypeError(
-        "Quantity must be an integer"
+try:
+    logger.info('Validating if quantity column in Orders is an integer.')
+    if not pd.api.types.is_integer_dtype(Orders['quantity']):
+        raise TypeError(
+            "Quantity must be an integer"
     )
-
-print("Quantity datatype validation passed")
-
+    logger.info('Quantity datatype validation passed.')
+except Exception:
+    logger.exception('Quantity datatype validation failed.')
+    raise
 
 #text type validation
+
 text_columns = [
     'customer_id',
     'order_id',
     'product_id'
 ]
 
-for column in text_columns:
-    if not pd.api.types.is_string_dtype(Orders[column]):
-        raise TypeError(
+try:
+    logger.info('Text columns validation.')
+    for column in text_columns:
+        if not pd.api.types.is_string_dtype(Orders[column]):
+            raise TypeError(
             f"{column} must be a string"
         )
-
-print("Identifier datatype validation passed")
+    logger.info('Text columns validation passed.')
+except Exception:
+    logger.exception('Text columns validation failed.')
+    raise
 
 
 #pre-load constraint validation
@@ -508,47 +566,78 @@ required_orders = [
 
 null_constraints = Orders[required_orders].isna().sum()
 
-if null_constraints.any():
-    raise ValueError(
-        f"Orders contain NULL values in required fields: "
-        f"{null_constraints[null_constraints > 0].to_dict()}"
+try:
+    logger.info('Pre-load constraint validation.')
+    if null_constraints.any():
+        raise ValueError(
+            f"Orders contain NULL values in required fields: "
+            f"{null_constraints[null_constraints > 0].to_dict()}"
     )
-
-print("Pre-load constraint validation passed")
-
+    logger.info('Pre-load constraint validation passed.')
+except Exception:
+    logger.exception('Pre-load constraint validation failed.')
+    raise
 
 
     
-# # load customers to db
-# Customers.to_sql(
-#     name='customers',
-#     if_exists='append',
-#     con=engine,
-#     index=False
+# # # load customers to db
+# try:
+#     logger.info(f'Loading {len(Customers)} customers into ecommerce database.')
+#     Customers.to_sql(
+#         name='customers',
+#         if_exists='append',
+#         con=engine,
+#         index=False
 # )
+#     logger.info(f'Successfully loaded {len(Customers)} customers into ecommerce database.')
+# except Exception:
+#     logger.exception(f'Failed to load {len(Customers)} customers into ecommerce database.')
+#     raise
+
 # # Load locations to db 
-# Location.to_sql(
-#     name='locations',
-#     if_exists='append',
-#     con=engine,
-#     index=False
+# try:
+#     logger.info(f'Loading {len(Location)} locations into ecommerce database.')
+#     Location.to_sql(
+#         name='locations',
+#         if_exists='append',
+#         con=engine,
+#         index=False
 # )
+#     logger.info(f'Successfully loaded {len(Location)} locations into ecommerce database.')
+# except Exception:
+#     logger.exception(f'Failed to load {len(Location)} locations into ecommerce database.')
+#     raise
 
 # #load products to db
-# Products.to_sql(
-#     name='products',
-#     if_exists='append',
-#     con=engine,
-#     index=False
+# try:
+#     logger.info(f'Loading {len(Products)} Products into ecommerce database.')
+#     Products.to_sql(
+#         name='products',
+#         if_exists='append',
+#         con=engine,
+#         index=False
 # )
-# #load orders to db
-# Orders.to_sql(
-#     name='orders',
-#     if_exists='append',
-#     con=engine,
-#     index=False
-# )
+#     logger.info(f'Successfully loaded {len(Products)} Products into ecommerce database.')
+# except Exception:
+#     logger.exception(f'Failed to load {len(Products)} Products into ecommerce database.')
+#     raise
 
+# #load orders to db
+# try:
+#     logger.info(f'Loading {len(Orders)} orders into ecommerce database.')
+#     Orders.to_sql(
+#         name='orders',
+#         if_exists='append',
+#         con=engine,
+#         index=False
+# )
+#     logger.info(f'Successfully loaded {len(Orders)} orders into ecommerce database.')
+# except Exception:
+#     logger.exception(f'Failed to load {len(Orders)} orders into ecommerce database.')
+#     raise
+
+
+logger.info('ETL pipeline completed successfully.')
 
 
   
