@@ -45,7 +45,7 @@ logger.addHandler(fh)
 
 # Database connection
 
-connection_url = "postgresql+psycopg2://postgres:password@localhost:port/database"
+connection_url = "postgresql+psycopg2://postgres:password@host:port/database"
 engine = create_engine(connection_url)
 
 
