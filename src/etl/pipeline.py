@@ -45,7 +45,7 @@ logger.addHandler(fh)
 
 # Database connection
 
-connection_url = "postgresql+psycopg2://postgres:redviper@localhost:5432/ecommerce"
+connection_url = "postgresql+psycopg2://postgres:password@localhost:port/database"
 engine = create_engine(connection_url)
 
 
