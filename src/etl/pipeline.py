@@ -3,6 +3,8 @@ import pandas as pd
 import sys
 from pathlib import Path
 import logging
+import os
+from dotenv import load_dotenv
 
 project_root = Path.cwd()
 sys.path.append(str(project_root))
@@ -43,9 +45,24 @@ logger.addHandler(ch)
 logger.addHandler(fh)
 
 
-# Database connection
 
-connection_url = "postgresql+psycopg2://postgres:password@host:port/database"
+# Database connection
+load_dotenv(override=True)
+
+
+db_vars=['host','username','password','port','database']
+
+for var in db_vars:
+    if not os.getenv(var):
+        sys.exit(f"Error: {var} is missing.")
+
+        
+host=os.getenv('host')
+username=os.getenv('username')
+password=os.getenv('password')
+port=os.getenv('port')
+database=os.getenv('database')
+connection_url = f"postgresql+psycopg2://{username}:{password}@{host}:{port}/{database}"
 engine = create_engine(connection_url)
 
 
