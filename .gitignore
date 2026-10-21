@@ -1,5 +1,6 @@
 /data
 .env
+.venv/
 /logs
 
 # Python cache files

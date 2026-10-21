@@ -1,0 +1,10 @@
+.venv/
+.git/
+.env
+data/
+logs/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+.pytest_cache/

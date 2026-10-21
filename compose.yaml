@@ -1,0 +1,96 @@
+
+services:
+  # PostgreSQL database for storing the cleaned ecommerce data.
+  postgres:
+    image: postgres:17
+    container_name: ecommerce-postgres
+    restart: unless-stopped
+
+    # These values are read from the project's .env file.
+    # They configure the initial PostgreSQL user and database.
+    environment:
+      POSTGRES_USER: ${username}
+      POSTGRES_PASSWORD: ${password}
+      POSTGRES_DB: ${database}
+
+    # Expose PostgreSQL on port 5433 on Windows.
+    # The container itself continues to listen on port 5432.
+    # This avoids conflicting with the existing Windows PostgreSQL service.
+    ports:
+      - "5433:5432"
+
+    # Persist database files even when the container is stopped or recreated.
+    # The second mount creates the separate Metabase application database
+    # when PostgreSQL initializes a new, empty data volume.
+    volumes:
+      - ecommerce_postgres_data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+    # Wait until PostgreSQL is ready to accept connections.
+    # Other services use this health check before starting.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Python service that builds and runs the ecommerce ETL pipeline.
+  etl:
+    build: .
+    environment:
+      # Use the PostgreSQL service name as the hostname.
+      # Containers communicate through Docker's internal network.
+      host: postgres
+      username: ${username}
+      password: ${password}
+      port: "5432"
+      database: ${database}
+
+      # Path to the raw CSV files inside the ETL container.
+      DATA_PATH: /app/data/raw
+
+    # Mount input data as read-only to protect the original CSV files.
+    # Mount logs separately so generated log files remain accessible locally.
+    volumes:
+      - ./data:/app/data:ro
+      - ./logs:/app/logs
+
+    # Do not start ETL until PostgreSQL passes its health check.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # Run ETL only when explicitly requested with this profile.
+    # Starting the database and Metabase won't automatically rerun the pipeline.
+    profiles:
+      - run-etl
+
+  # Metabase provides the web interface for exploring and visualizing data.
+  metabase:
+    image: metabase/metabase:latest
+    container_name: ecommerce-metabase
+    restart: unless-stopped
+
+    # Open Metabase in a browser at http://localhost:3000.
+    ports:
+      - "3000:3000"
+
+    # Store Metabase's application metadata in PostgreSQL rather than
+    # its default embedded database.
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: postgres
+      MB_DB_PORT: "5432"
+      MB_DB_DBNAME: metabase
+      MB_DB_USER: ${username}
+      MB_DB_PASS: ${password}
+
+    # Start Metabase only after PostgreSQL is ready.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# Named volume for persistent PostgreSQL storage.
+# Docker manages this volume independently of the container lifecycle.
+volumes:
+  ecommerce_postgres_data:

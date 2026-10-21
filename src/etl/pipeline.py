@@ -47,7 +47,7 @@ logger.addHandler(fh)
 
 
 # Database connection
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 
 db_vars=['host','username','password','port','database']
@@ -66,8 +66,8 @@ connection_url = f"postgresql+psycopg2://{username}:{password}@{host}:{port}/{da
 engine = create_engine(connection_url)
 
 
-data_path = "C:/Users/DELL/Projects/ecommerce-sales-pipeline/data/raw"
 
+data_path = os.getenv("DATA_PATH","data/raw")
 files = ["Customers.csv", "Location.csv", "Products.csv", "Orders.csv"]
 
 #  validatiing whether files exist and are actual files
