@@ -24,8 +24,8 @@ services:
     # when PostgreSQL initializes a new, empty data volume.
     volumes:
       - ecommerce_postgres_data:/var/lib/postgresql/data
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
     # Wait until PostgreSQL is ready to accept connections.
     # Other services use this health check before starting.
     healthcheck:
